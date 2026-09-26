@@ -63,6 +63,29 @@ describe("ZeroTier v1 request shaping", () => {
       v1Context(fetcher),
     );
   });
+
+  it("sends the full permission set for a network user, with omitted flags as false", async () => {
+    const fetcher = jsonFetcher({ id: "u1", r: true, a: false, m: false, d: false }, (url, init) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/network/abc/users`);
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({ id: "u1", r: true, a: false, m: false, d: false });
+    });
+    const result = await zerotierActionHandlers.set_network_user_permissions(
+      { networkId: "abc", userId: "u1", read: true },
+      v1Context(fetcher),
+    );
+    expect(result).toEqual({ result: { id: "u1", r: true, a: false, m: false, d: false } });
+  });
+
+  it("rejects network user permissions on v2 connections", async () => {
+    const fetcher = jsonFetcher({});
+    const error = await zerotierActionHandlers
+      .set_network_user_permissions({ networkId: "abc", userId: "u1", read: true }, v2Context(fetcher))
+      .catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(400);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });
 
 describe("ZeroTier v2 request shaping", () => {
