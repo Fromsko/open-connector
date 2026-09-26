@@ -46,7 +46,7 @@ export const provider: ProviderDefinition = {
           secret: false,
           placeholder: "c0341f5c-...",
           description:
-            "New Central (v2) only: the organization ID used as the default org-id filter for list actions and the default org for get_org. Leave empty for v1.",
+            "New Central (v2) only: default organization for list_networks and list_network_groups (org-id filter) and for get_org. Other org-scoped actions take orgId explicitly. Leave empty for v1.",
         },
       ],
     },
