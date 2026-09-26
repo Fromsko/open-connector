@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { validateActionInput } from "../../core/validation.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
+import { zerotierActions } from "./actions.ts";
 import { credentialValidators, zerotierActionHandlers } from "./executors.ts";
 import { createZerotierContext, zerotierV1BaseUrl, zerotierV2BaseUrl } from "./runtime.ts";
 
@@ -187,5 +189,18 @@ describe("ZeroTier credential validation", () => {
       { fetcher: jsonFetcher(orgs) },
     );
     expect(result?.profile).toEqual({ accountId: undefined, displayName: "ZeroTier New Central v2" });
+  });
+});
+
+describe("ZeroTier action schemas", () => {
+  const action = (name: string) => zerotierActions.find((candidate) => candidate.name === name)!;
+
+  it("treats check_permissions as a read and accepts the v2 resource types", () => {
+    const checkPermissions = action("check_permissions");
+    const check = (resourceType: string) => ({ checks: [{ permission: "read", resourceType, resourceId: "r1" }] });
+
+    expect(checkPermissions.operationType).toBe("read");
+    expect(validateActionInput(checkPermissions, check("network_group")).valid).toBe(true);
+    expect(validateActionInput(checkPermissions, check("networkGroup")).valid).toBe(false);
   });
 });

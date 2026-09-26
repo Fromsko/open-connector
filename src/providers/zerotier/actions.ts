@@ -750,7 +750,7 @@ export const zerotierActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "check_permissions",
-    operationType: "write",
+    operationType: "read",
     description: "v2 only: check whether the authenticated principal holds permissions on resources.",
     inputSchema: s.object(
       "Input for checking permissions.",
@@ -759,7 +759,9 @@ export const zerotierActions: ActionDefinition[] = [
           "Permission checks to perform.",
           s.requiredObject("One permission check.", {
             permission: s.nonEmptyString("The permission name to check."),
-            resourceType: s.nonEmptyString("The resource type, e.g. org, networkGroup, network."),
+            resourceType: s.stringEnum(["org", "network_group", "network"], {
+              description: "The type of resource to check permissions for.",
+            }),
             resourceId: s.nonEmptyString("The resource ID."),
           }),
         ),
