@@ -388,6 +388,47 @@ describe("ZeroTier credential validation", () => {
     expect(result?.profile).toEqual({ accountId: "org2", displayName: "Beta Org" });
   });
 
+  const routedFetcher = (routes: Record<string, () => Response>) =>
+    vi.fn(async (input: RequestInfo | URL) => {
+      const route = routes[input.toString()];
+      if (!route) throw new Error(`unexpected request ${input.toString()}`);
+      return route();
+    }) as unknown as typeof fetch;
+
+  it.each([
+    { label: "one listed organization", items: [{ id: "org-real", name: "Real Org" }] },
+    {
+      label: "several listed organizations",
+      items: [
+        { id: "org1", name: "Acme Org" },
+        { id: "org2", name: "Beta Org" },
+      ],
+    },
+  ])("rejects a configured v2 orgId the key cannot reach with $label", async ({ items }) => {
+    const fetcher = routedFetcher({
+      [`${zerotierV2BaseUrl}/org`]: () => Response.json({ items }),
+      [`${zerotierV2BaseUrl}/org/org-typo`]: () => Response.json({ message: "forbidden" }, { status: 403 }),
+    });
+    const error = await credentialValidators.customCredential!(
+      { values: { apiVersion: "v2", apiKey: "v2-key", orgId: "org-typo" } },
+      { fetcher },
+    ).catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(403);
+  });
+
+  it("looks up a configured v2 orgId that GET /org does not list", async () => {
+    const fetcher = routedFetcher({
+      [`${zerotierV2BaseUrl}/org`]: () => Response.json({ items: [{ id: "org1", name: "Acme Org" }] }),
+      [`${zerotierV2BaseUrl}/org/org2`]: () => Response.json({ id: "org2", name: "Beta Org" }),
+    });
+    const result = await credentialValidators.customCredential!(
+      { values: { apiVersion: "v2", apiKey: "v2-key", orgId: "org2" } },
+      { fetcher },
+    );
+    expect(result?.profile).toEqual({ accountId: "org2", displayName: "Beta Org" });
+  });
+
   it("leaves the v2 account id to the runtime default when no single organization is identified", async () => {
     const orgs = {
       items: [

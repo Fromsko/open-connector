@@ -205,23 +205,36 @@ function readV1Account(payload: unknown): ZerotierCredentialAccount {
 
 /**
  * New Central GET /org lists the organizations the service account can reach.
- * A service account belongs to one organization, which identifies the account;
- * the configured orgId picks the organization when several are listed. When
- * no single organization is identified the runtime default account id applies.
+ * A service account belongs to one organization, which identifies the account.
+ * A configured orgId must name an organization the key can reach, because the
+ * list actions and get_org keep using it; one missing from the list is looked
+ * up directly so the upstream 403/404 rejects a mistyped id. Without an orgId,
+ * a single listed organization identifies the account, otherwise the runtime
+ * default account id applies.
  */
-function readV2Account(payload: unknown, orgId: string | undefined): ZerotierCredentialAccount {
+async function readV2Account(context: ZerotierActionContext, payload: unknown): Promise<ZerotierCredentialAccount> {
   const orgs = looseArray(optionalRecord(payload)?.items).map((item) => optionalRecord(item));
-  const configuredOrg = orgId ? orgs.find((item) => optionalString(item?.id) === orgId) : undefined;
-  const org = configuredOrg ?? (orgs.length === 1 ? orgs[0] : undefined);
+  const orgId = context.orgId;
+  if (!orgId) {
+    const onlyOrg = orgs.length === 1 ? orgs[0] : undefined;
+    return {
+      accountId: optionalString(onlyOrg?.id),
+      displayName: optionalString(onlyOrg?.name) ?? "ZeroTier New Central v2",
+    };
+  }
+  const org =
+    orgs.find((item) => optionalString(item?.id) === orgId) ??
+    optionalRecord(await zerotierRequest(context, { path: `/org/${zerotierPathSegment(orgId, "orgId")}` }));
   return {
-    accountId: optionalString(org?.id),
+    accountId: optionalString(org?.id) ?? orgId,
     displayName: optionalString(org?.name) ?? "ZeroTier New Central v2",
   };
 }
 
 /**
  * Verify a ZeroTier credential against the API generation it selects: v1 calls
- * GET /status on Legacy Central, v2 calls GET /org on New Central.
+ * GET /status on Legacy Central, v2 calls GET /org on New Central (plus
+ * GET /org/{orgId} when the configured orgId is not in that list).
  */
 export async function validateZerotierCredential(
   values: Record<string, string>,
@@ -231,7 +244,7 @@ export async function validateZerotierCredential(
   const context = createZerotierContext(values, fetcher, signal);
   const path = context.apiVersion === "v1" ? v1ValidationEndpoint : v2ValidationEndpoint;
   const payload = await zerotierRequest(context, { path });
-  const account = context.apiVersion === "v1" ? readV1Account(payload) : readV2Account(payload, context.orgId);
+  const account = context.apiVersion === "v1" ? readV1Account(payload) : await readV2Account(context, payload);
   return {
     profile: {
       accountId: account.accountId,
