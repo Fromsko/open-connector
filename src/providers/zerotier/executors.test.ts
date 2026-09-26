@@ -190,6 +190,14 @@ describe("ZeroTier error propagation", () => {
     expect(error).toBeInstanceOf(ProviderRequestError);
     expect((error as ProviderRequestError).status).toBe(400);
   });
+
+  it("keeps the upstream status for non-JSON error bodies", async () => {
+    const fetcher = vi.fn(async () => new Response("Unauthorized", { status: 401 })) as unknown as typeof fetch;
+    const error = await zerotierActionHandlers.list_networks({}, v1Context(fetcher)).catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(401);
+    expect((error as ProviderRequestError).message).toBe("Unauthorized");
+  });
 });
 
 describe("ZeroTier credential validation", () => {

@@ -26,7 +26,7 @@ export const zerotierV2BaseUrl = "https://central.zerotier.com/api/v2";
 const zerotierV2BetaBaseUrl = "https://central.zerotier.com/api/v2beta";
 
 export function parseZerotierApiVersion(value: unknown): ZerotierApiVersion {
-  const version = optionalString(value)?.trim().toLowerCase();
+  const version = optionalString(value)?.toLowerCase();
   if (version === "v1" || version === "v2") {
     return version;
   }
@@ -39,14 +39,14 @@ export function createZerotierContext(
   signal?: AbortSignal,
 ): ZerotierActionContext {
   const apiVersion = parseZerotierApiVersion(values.apiVersion);
-  const apiKey = optionalString(values.apiKey)?.trim();
+  const apiKey = optionalString(values.apiKey);
   if (!apiKey) {
     throw providerInputError("zerotier apiKey is required.");
   }
   return {
     apiVersion,
     apiKey,
-    orgId: optionalString(values.orgId)?.trim(),
+    orgId: optionalString(values.orgId),
     fetcher,
     signal,
   };
@@ -109,6 +109,8 @@ export async function zerotierRequest(
     const payload = await readProviderJsonBody(response, {
       emptyBody: null,
       invalidJsonMessage: "ZeroTier returned invalid JSON",
+      // A non-JSON error body keeps the upstream status instead of becoming a 502 parse failure.
+      invalidJsonFallback: response.ok ? undefined : (text) => ({ message: text }),
     });
     if (!response.ok) {
       const message =
