@@ -493,8 +493,9 @@ export const zerotierActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "replace_iam",
-    operationType: "write",
-    description: "v2 only: replace all IAM assignments on an org, network group, or network.",
+    operationType: "destructive",
+    description:
+      "v2 only: replace all IAM assignments on an org, network group, or network. Existing assignments missing from the list are removed, so an empty list strips every role.",
     inputSchema: s.object(
       "Input for replacing IAM assignments.",
       {
@@ -508,7 +509,7 @@ export const zerotierActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "remove_iam",
-    operationType: "write",
+    operationType: "destructive",
     description: "v2 only: remove roles from a principal on an org, network group, or network.",
     inputSchema: s.object(
       "Input for removing IAM roles.",

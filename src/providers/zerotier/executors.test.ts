@@ -490,6 +490,12 @@ describe("ZeroTier action schemas", () => {
     expect(validateActionInput(checkPermissions, check("networkGroup")).valid).toBe(false);
   });
 
+  it("marks IAM revocation and replacement as destructive", () => {
+    expect(action("replace_iam").operationType).toBe("destructive");
+    expect(action("remove_iam").operationType).toBe("destructive");
+    expect(action("add_iam").operationType).toBe("write");
+  });
+
   it("only requires deviceId for each member added in bulk", () => {
     const addMembers = action("add_members");
     expect(validateActionInput(addMembers, { networkId: "nw1", members: [{ deviceId: "abcdef0123" }] }).valid).toBe(
