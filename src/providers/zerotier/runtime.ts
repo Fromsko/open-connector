@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
 
 import { looseArray, optionalRecord, optionalString } from "../../core/cast.ts";
+import { encodePathSegment } from "../../core/request.ts";
 import {
   providerInputError,
   providerUserAgent,
@@ -50,6 +51,18 @@ export function createZerotierContext(
     fetcher,
     signal,
   };
+}
+
+/**
+ * Encode one ID as a single path segment. encodeURIComponent leaves "." and
+ * ".." intact and new URL() collapses them, so memberId ".." would turn
+ * delete_member into DELETE /network/{id}; reject dot segments and separators.
+ */
+export function zerotierPathSegment(value: string, field: string): string {
+  if (value === "." || value === ".." || value.includes("/") || value.includes("\\")) {
+    throw providerInputError(`${field} must be a single path segment.`);
+  }
+  return encodePathSegment(value);
 }
 
 export function zerotierAuthorizationHeader(credential: Pick<ZerotierActionContext, "apiVersion" | "apiKey">): string {

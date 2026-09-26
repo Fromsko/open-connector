@@ -190,6 +190,51 @@ describe("ZeroTier version guards", () => {
   });
 });
 
+describe("ZeroTier path IDs", () => {
+  const expectRejected = async (run: (fetcher: typeof fetch) => Promise<unknown>) => {
+    const fetcher = jsonFetcher({});
+    const error = await run(fetcher).catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(400);
+    expect(fetcher).not.toHaveBeenCalled();
+  };
+
+  it.each(["..", " .. ", ".", "a/b", "a\\b"])(
+    "rejects %j as a member, token, or network ID before any request",
+    async (value) => {
+      await expectRejected((fetcher) =>
+        zerotierActionHandlers.delete_member({ networkId: "8056c2e21c000001", memberId: value }, v1Context(fetcher)),
+      );
+      await expectRejected((fetcher) =>
+        zerotierActionHandlers.delete_member({ networkId: "8056c2e21c000001", memberId: value }, v2Context(fetcher)),
+      );
+      await expectRejected((fetcher) =>
+        zerotierActionHandlers.update_member(
+          { networkId: "8056c2e21c000001", memberId: value, name: "pwned" },
+          v2Context(fetcher),
+        ),
+      );
+      await expectRejected((fetcher) =>
+        zerotierActionHandlers.delete_user_token({ userId: "user-1", tokenName: value }, v1Context(fetcher)),
+      );
+      await expectRejected((fetcher) =>
+        zerotierActionHandlers.delete_network({ networkId: value }, v1Context(fetcher)),
+      );
+      await expectRejected((fetcher) =>
+        zerotierActionHandlers.create_network({ networkGroupId: value, name: "lab" }, v2Context(fetcher)),
+      );
+      await expectRejected((fetcher) => zerotierActionHandlers.get_org({ orgId: value }, v2Context(fetcher)));
+    },
+  );
+
+  it("encodes other characters inside one segment", async () => {
+    const fetcher = jsonFetcher({}, (url) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/user/user-1/token/ci%20token%3F`);
+    });
+    await zerotierActionHandlers.delete_user_token({ userId: "user-1", tokenName: "ci token?" }, v1Context(fetcher));
+  });
+});
+
 describe("ZeroTier list normalization", () => {
   it("wraps bare payloads as a single item", async () => {
     const fetcher = jsonFetcher({ id: "nw1" });

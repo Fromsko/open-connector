@@ -20,7 +20,6 @@ import {
   optionalStringArray,
   requiredStringArray,
 } from "../../core/cast.ts";
-import { encodePathSegment } from "../../core/request.ts";
 import {
   defineProviderExecutors,
   defineProviderProxy,
@@ -37,6 +36,7 @@ import {
   zerotierAuthorizationHeader,
   zerotierList,
   zerotierOrgId,
+  zerotierPathSegment,
   zerotierRequest,
   zerotierResult,
   zerotierStatus,
@@ -48,8 +48,9 @@ const service = "zerotier";
 
 type ZerotierHandler = ProviderRuntimeHandler<ZerotierActionContext>;
 
+/** Read a required ID from the action input as one encoded path segment. */
 const id = (input: Record<string, unknown>, field: string): string =>
-  encodePathSegment(requiredInputString(input[field], field));
+  zerotierPathSegment(requiredInputString(input[field], field), field);
 
 const iamResourcePath = (input: Record<string, unknown>): string => {
   const resourceType = requiredInputString(input.resourceType, "resourceType");
@@ -94,7 +95,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       return zerotierResult(
         await zerotierRequest(ctx, {
           method: "POST",
-          path: `/network-group/${encodePathSegment(groupId)}/network`,
+          path: `/network-group/${zerotierPathSegment(groupId, "networkGroupId")}/network`,
           body,
         }),
       );
@@ -191,6 +192,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
   async delete_member(input, ctx) {
     const networkId = id(input, "networkId");
     const memberId = requiredInputString(input.memberId, "memberId");
+    const memberSegment = zerotierPathSegment(memberId, "memberId");
     if (ctx.apiVersion === "v2") {
       return zerotierStatus(
         await zerotierRequest(ctx, {
@@ -203,7 +205,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
     return zerotierStatus(
       await zerotierRequest(ctx, {
         method: "DELETE",
-        path: `/network/${networkId}/member/${encodePathSegment(memberId)}`,
+        path: `/network/${networkId}/member/${memberSegment}`,
       }),
     );
   },
@@ -232,9 +234,11 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       if (!orgId) {
         throw providerInputError("orgId is required for v2 (no credential orgId configured either).");
       }
-      return zerotierResult(await zerotierRequest(ctx, { path: `/org/${encodePathSegment(orgId)}` }));
+      return zerotierResult(await zerotierRequest(ctx, { path: `/org/${zerotierPathSegment(orgId, "orgId")}` }));
     }
-    return zerotierResult(await zerotierRequest(ctx, { path: orgId ? `/org/${encodePathSegment(orgId)}` : "/org" }));
+    return zerotierResult(
+      await zerotierRequest(ctx, { path: orgId ? `/org/${zerotierPathSegment(orgId, "orgId")}` : "/org" }),
+    );
   },
 
   // ── v1-only actions (Legacy Central, api.zerotier.com) ────────────────────
@@ -331,7 +335,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
     return zerotierStatus(
       await zerotierRequest(ctx, {
         method: "DELETE",
-        path: `/user/${id(input, "userId")}/token/${encodePathSegment(requiredInputString(input.tokenName, "tokenName"))}`,
+        path: `/user/${id(input, "userId")}/token/${id(input, "tokenName")}`,
       }),
     );
   },
