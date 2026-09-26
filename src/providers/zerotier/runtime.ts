@@ -122,12 +122,21 @@ export async function zerotierRequest(
     const payload = await readProviderJsonBody(response, {
       emptyBody: null,
       invalidJsonMessage: "ZeroTier returned invalid JSON",
-      // A non-JSON error body keeps the upstream status instead of becoming a 502 parse failure.
-      invalidJsonFallback: response.ok ? undefined : (text) => ({ message: text }),
+      // A non-JSON error body (such as a proxy's HTML page) keeps the upstream
+      // status instead of becoming a 502 parse failure; only its start is kept.
+      invalidJsonFallback: response.ok ? undefined : (text) => ({ message: text.trim().slice(0, 500) }),
     });
     if (!response.ok) {
-      const message =
-        optionalString(optionalRecord(payload)?.message) ?? `ZeroTier request failed with status ${response.status}`;
+      const record = optionalRecord(payload);
+      const summary = optionalString(record?.message) ?? `ZeroTier request failed with status ${response.status}`;
+      // v2 validation failures list the offending fields under details[{field, message}].
+      const details = looseArray(record?.details).flatMap((item) => {
+        const detail = optionalRecord(item);
+        const field = optionalString(detail?.field);
+        const reason = optionalString(detail?.message);
+        return reason ? [field ? `${field}: ${reason}` : reason] : [];
+      });
+      const message = details.length > 0 ? `${summary}: ${details.join("; ")}` : summary;
       throw new ProviderRequestError(response.status, message);
     }
     return payload;

@@ -334,6 +334,40 @@ describe("ZeroTier error propagation", () => {
     expect((error as ProviderRequestError).status).toBe(401);
     expect((error as ProviderRequestError).message).toBe("Unauthorized");
   });
+
+  it("lists v2 per-field validation details in the error message", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json(
+        { code: 400, message: "validation failed", details: [{ field: "name", message: "name too short" }] },
+        { status: 400 },
+      ),
+    ) as unknown as typeof fetch;
+    const error = await zerotierActionHandlers
+      .update_network({ networkId: "nw1", name: "x" }, v2Context(fetcher))
+      .catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(400);
+    expect((error as ProviderRequestError).message).toBe("validation failed: name: name too short");
+  });
+
+  it("bounds the message taken from a non-JSON error page", async () => {
+    const html = `<html><body>502 Bad Gateway${" ".repeat(10)}${"x".repeat(1000)}</body></html>`;
+    const fetcher = vi.fn(
+      async () => new Response(html, { status: 502, headers: { "content-type": "text/html" } }),
+    ) as unknown as typeof fetch;
+    const error = await zerotierActionHandlers.list_networks({}, v1Context(fetcher)).catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(502);
+    expect((error as ProviderRequestError).message.length).toBeLessThanOrEqual(500);
+    expect((error as ProviderRequestError).message.startsWith("<html><body>502 Bad Gateway")).toBe(true);
+  });
+
+  it("falls back to the status when a non-JSON error body is blank", async () => {
+    const fetcher = vi.fn(async () => new Response("   ", { status: 503 })) as unknown as typeof fetch;
+    const error = await zerotierActionHandlers.list_networks({}, v1Context(fetcher)).catch((err: unknown) => err);
+    expect((error as ProviderRequestError).status).toBe(503);
+    expect((error as ProviderRequestError).message).toBe("ZeroTier request failed with status 503");
+  });
 });
 
 describe("ZeroTier credential validation", () => {
