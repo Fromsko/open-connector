@@ -31,10 +31,12 @@ const descriptionParam = s.string("The description to set (may be an empty strin
 const listNetworksInput = s.object(
   "Filters for listing ZeroTier networks.",
   {
-    orgId: s.string("v2 only: organization ID to filter by. Falls back to the connection's orgId field when omitted."),
-    stats: s.boolean("v2 only: include device statistics for each network."),
+    orgId: s.string(
+      "v2 only, rejected on v1: organization ID to filter by. Falls back to the connection's orgId field when omitted.",
+    ),
+    stats: s.boolean("v2 only, rejected on v1: include device statistics for each network."),
     permissionCheck: s.stringArray(
-      "v2 only: permission names to check for each network; results include a permissions map.",
+      "v2 only, rejected on v1: permission names to check for each network; results include a permissions map.",
     ),
   },
   { required: [] },
@@ -93,7 +95,7 @@ export const zerotierActions: ActionDefinition[] = [
     name: "list_networks",
     operationType: "read",
     description:
-      "List ZeroTier networks visible to the configured token. Works on both API versions; orgId, stats, and permissionCheck only apply to v2.",
+      "List ZeroTier networks visible to the configured token. Works on both API versions; orgId, stats, and permissionCheck are v2 only and rejected on v1, which always lists every network the token can access.",
     inputSchema: listNetworksInput,
     outputSchema: listOutput("The list of ZeroTier networks."),
   }),
@@ -112,11 +114,13 @@ export const zerotierActions: ActionDefinition[] = [
     name: "create_network",
     operationType: "write",
     description:
-      "Create a ZeroTier network. For v1 sends {config, description}; for v2 sends {name, description, config} and requires networkGroupId (the group the network is created under) and name.",
+      "Create a ZeroTier network. For v1 sends {config, description} and rejects networkGroupId; for v2 sends {name, description, config} and requires networkGroupId (the group the network is created under) and name.",
     inputSchema: s.object(
       "Input for creating a ZeroTier network.",
       {
-        networkGroupId: s.string("v2 only, required: the network group ID to create the network under."),
+        networkGroupId: s.string(
+          "v2 only, required on v2 and rejected on v1: the network group ID to create the network under.",
+        ),
         name: s.string("The network name (required for v2)."),
         description: descriptionParam,
         config: s.looseObject(

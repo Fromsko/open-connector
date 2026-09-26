@@ -129,6 +129,38 @@ describe("ZeroTier v1 request shaping", () => {
     },
   );
 
+  it.each([{ orgId: "org-x" }, { stats: true }, { stats: false }, { permissionCheck: ["read"] }])(
+    "rejects the v2-only list_networks filter %j on v1 before any request",
+    async (filters) => {
+      const fetcher = jsonFetcher([]);
+      const error = await zerotierActionHandlers
+        .list_networks(filters, v1Context(fetcher))
+        .catch((err: unknown) => err);
+      expect(error).toBeInstanceOf(ProviderRequestError);
+      expect((error as ProviderRequestError).status).toBe(400);
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
+
+  it("lists every v1 network without applying the v2-only connection orgId", async () => {
+    const fetcher = jsonFetcher([{ id: "nw1" }], (url) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/network`);
+    });
+    const result = await zerotierActionHandlers.list_networks({}, v1Context(fetcher, { orgId: "org-x" }));
+    expect(result).toEqual({ items: [{ id: "nw1" }] });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("rejects the v2-only networkGroupId when creating a v1 network", async () => {
+    const fetcher = jsonFetcher({ id: "nw1" });
+    const error = await zerotierActionHandlers
+      .create_network({ networkGroupId: "grp-x", name: "lab" }, v1Context(fetcher))
+      .catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(400);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("rejects network user permissions on v2 connections", async () => {
     const fetcher = jsonFetcher({});
     const error = await zerotierActionHandlers

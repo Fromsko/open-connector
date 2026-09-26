@@ -74,6 +74,14 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       });
       return zerotierList(payload);
     }
+    // v1 GET /network takes no filters, so dropping these would widen the result
+    // past the scope the caller asked for. The connection orgId is a v2-only
+    // default and is deliberately not checked here.
+    if (input.orgId !== undefined || input.stats !== undefined || input.permissionCheck !== undefined) {
+      throw providerInputError(
+        "orgId, stats, and permissionCheck are v2 only; v1 GET /network lists every network the token can access.",
+      );
+    }
     return zerotierList(await zerotierRequest(ctx, { path: "/network" }));
   },
 
@@ -99,6 +107,9 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
           body,
         }),
       );
+    }
+    if (input.networkGroupId !== undefined) {
+      throw providerInputError("networkGroupId is v2 only; v1 networks have no network group.");
     }
     const config = { ...optionalRecord(input.config) };
     if (input.name !== undefined) {
