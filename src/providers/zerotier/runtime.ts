@@ -9,7 +9,7 @@ import {
   runProviderRequest,
 } from "../provider-runtime.ts";
 
-export type ZerotierApiVersion = "v1" | "v2";
+type ZerotierApiVersion = "v1" | "v2";
 
 export interface ZerotierActionContext {
   apiVersion: ZerotierApiVersion;
@@ -52,7 +52,7 @@ export function createZerotierContext(
   };
 }
 
-export function zerotierAuthorizationHeader(credential: { apiVersion: ZerotierApiVersion; apiKey: string }): string {
+export function zerotierAuthorizationHeader(credential: Pick<ZerotierActionContext, "apiVersion" | "apiKey">): string {
   return credential.apiVersion === "v2" ? `Bearer ${credential.apiKey}` : `token ${credential.apiKey}`;
 }
 
@@ -157,7 +157,7 @@ export function zerotierStatus(payload: unknown): Record<string, unknown> {
   return { ok: true, result: payload };
 }
 
-/** Org-id query value used by v2 list endpoints; falls back to the connection's orgId field. */
+/** Organization ID from the action input, falling back to the connection's orgId field. */
 export function zerotierOrgId(context: ZerotierActionContext, input: Record<string, unknown>): string | undefined {
   return optionalString(input.orgId) ?? context.orgId;
 }

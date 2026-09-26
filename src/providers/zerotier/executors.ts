@@ -9,6 +9,7 @@ import type { ProviderActionHandlers, ProviderRuntimeHandler } from "../provider
 import type { ZerotierActionContext } from "./runtime.ts";
 
 import {
+  booleanString,
   compactObject,
   objectArray,
   optionalBoolean,
@@ -35,6 +36,7 @@ import {
   validateZerotierCredential,
   zerotierAuthorizationHeader,
   zerotierList,
+  zerotierOrgId,
   zerotierRequest,
   zerotierResult,
   zerotierStatus,
@@ -49,9 +51,6 @@ type ZerotierHandler = ProviderRuntimeHandler<ZerotierActionContext>;
 const id = (input: Record<string, unknown>, field: string): string =>
   encodePathSegment(requiredInputString(input[field], field));
 
-const requiredStrings = (value: unknown, field: string): string[] =>
-  requiredStringArray(value, field, providerInputError);
-
 const iamResourcePath = (input: Record<string, unknown>): string => {
   const resourceType = requiredInputString(input.resourceType, "resourceType");
   if (resourceType !== "org" && resourceType !== "network-group" && resourceType !== "network") {
@@ -60,8 +59,6 @@ const iamResourcePath = (input: Record<string, unknown>): string => {
   return `/${resourceType}/${id(input, "resourceId")}/iam`;
 };
 
-const bool = (value: unknown): "true" | undefined => (value === true ? "true" : undefined);
-
 export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", ZerotierHandler> = {
   // ── Shared actions (dispatch on the connection's apiVersion) ──────────────
   async list_networks(input, ctx) {
@@ -69,8 +66,8 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       const payload = await zerotierRequest(ctx, {
         path: "/network",
         query: {
-          "org-id": optionalString(input.orgId) ?? ctx.orgId,
-          stats: bool(input.stats),
+          "org-id": zerotierOrgId(ctx, input),
+          stats: booleanString(input.stats),
           "permission-check": optionalStringArray(input.permissionCheck),
         },
       });
@@ -230,7 +227,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
   },
 
   async get_org(input, ctx) {
-    const orgId = optionalString(input.orgId) ?? ctx.orgId;
+    const orgId = zerotierOrgId(ctx, input);
     if (ctx.apiVersion === "v2") {
       if (!orgId) {
         throw providerInputError("orgId is required for v2 (no credential orgId configured either).");
@@ -364,7 +361,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       query: {
         "permission-check": optionalStringArray(input.permissionCheck),
         latest: optionalStringArray(input.latest),
-        stats: bool(input.stats),
+        stats: booleanString(input.stats),
       },
     });
     return zerotierList(payload);
@@ -375,8 +372,8 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
     const payload = await zerotierRequest(ctx, {
       path: "/network-group",
       query: {
-        "org-id": optionalString(input.orgId) ?? ctx.orgId,
-        stats: bool(input.stats),
+        "org-id": zerotierOrgId(ctx, input),
+        stats: booleanString(input.stats),
         "permission-check": optionalStringArray(input.permissionCheck),
       },
     });
@@ -428,7 +425,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
     const payload = await zerotierRequest(ctx, {
       path: `/network-group/${id(input, "networkGroupId")}/network`,
       query: {
-        stats: bool(input.stats),
+        stats: booleanString(input.stats),
         "permission-check": optionalStringArray(input.permissionCheck),
       },
     });
@@ -449,7 +446,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         body: [
           {
             principal: requiredInputString(input.principal, "principal"),
-            roles: requiredStrings(input.roles, "roles"),
+            roles: requiredStringArray(input.roles, "roles", providerInputError),
           },
         ],
       }),
@@ -476,7 +473,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         body: [
           {
             principal: requiredInputString(input.principal, "principal"),
-            roles: requiredStrings(input.roles, "roles"),
+            roles: requiredStringArray(input.roles, "roles", providerInputError),
           },
         ],
       }),
@@ -506,7 +503,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/org/${id(input, "orgId")}/invite-users`,
-        body: { emails: requiredStrings(input.emails, "emails") },
+        body: { emails: requiredStringArray(input.emails, "emails", providerInputError) },
       }),
     );
   },
@@ -610,7 +607,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         path: `/org/${id(input, "orgId")}/webhook`,
         body: compactObject({
           url: requiredInputString(input.url, "url"),
-          eventList: requiredStrings(input.eventList, "eventList"),
+          eventList: requiredStringArray(input.eventList, "eventList", providerInputError),
           description: optionalRawString(input.description),
         }),
       }),
@@ -699,7 +696,9 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
 
   async remove_members(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
-    const body = requiredStrings(input.deviceIds, "deviceIds").map((deviceId) => ({ deviceId }));
+    const body = requiredStringArray(input.deviceIds, "deviceIds", providerInputError).map((deviceId) => ({
+      deviceId,
+    }));
     return zerotierStatus(
       await zerotierRequest(ctx, { method: "DELETE", path: `/network/${id(input, "networkId")}/member`, body }),
     );
@@ -711,7 +710,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/network/${id(input, "networkId")}/member/authorize`,
-        body: requiredStrings(input.deviceIds, "deviceIds"),
+        body: requiredStringArray(input.deviceIds, "deviceIds", providerInputError),
       }),
     );
   },
@@ -722,7 +721,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/network/${id(input, "networkId")}/member/de-authorize`,
-        body: requiredStrings(input.deviceIds, "deviceIds"),
+        body: requiredStringArray(input.deviceIds, "deviceIds", providerInputError),
       }),
     );
   },
@@ -733,7 +732,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/network/${id(input, "networkId")}/member/reject`,
-        body: requiredStrings(input.deviceIds, "deviceIds"),
+        body: requiredStringArray(input.deviceIds, "deviceIds", providerInputError),
       }),
     );
   },
