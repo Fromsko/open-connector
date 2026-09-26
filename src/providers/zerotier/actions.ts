@@ -354,24 +354,6 @@ export const zerotierActions: ActionDefinition[] = [
     ),
     outputSchema: statusOutput("Deletion result."),
   }),
-  defineProviderAction(service, {
-    name: "set_network_user_permissions",
-    operationType: "write",
-    description: "v1 only: set a specific user's permissions on a network.",
-    inputSchema: s.object(
-      "Input for setting network user permissions.",
-      {
-        networkId: networkIdParam,
-        userId: s.nonEmptyString("The user ID to grant permissions to."),
-        read: s.boolean("Read permission (r)."),
-        authorize: s.boolean("Authorize permission (a)."),
-        modify: s.boolean("Modify permission (m)."),
-        delete: s.boolean("Delete permission (d)."),
-      },
-      { required: ["networkId", "userId"] },
-    ),
-    outputSchema: singleOutput("The applied permission set."),
-  }),
 
   // ── v2-only actions (New Central, central.zerotier.com) ───────────────────
   defineProviderAction(service, {

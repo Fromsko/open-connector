@@ -336,23 +336,6 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
     );
   },
 
-  async set_network_user_permissions(input, ctx) {
-    requireZerotierApiVersion(ctx, "v1");
-    return zerotierResult(
-      await zerotierRequest(ctx, {
-        method: "POST",
-        path: `/network/${id(input, "networkId")}/users`,
-        body: {
-          id: requiredInputString(input.userId, "userId"),
-          r: input.read === true,
-          a: input.authorize === true,
-          m: input.modify === true,
-          d: input.delete === true,
-        },
-      }),
-    );
-  },
-
   // ── v2-only actions (New Central, central.zerotier.com) ───────────────────
   async list_orgs(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
