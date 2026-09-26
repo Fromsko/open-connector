@@ -40,21 +40,51 @@ const listNetworksInput = s.object(
   { required: [] },
 );
 
-const memberIdsArray = s.array(
-  "Member device IDs (10-character hex strings).",
-  s.nonEmptyString("A member device ID."),
-);
+// The v2 batch member endpoints accept only 10-hex-digit device IDs.
+const deviceIdParam = s.string("The member device ID (10-character hex string).", {
+  minLength: 10,
+  maxLength: 10,
+  pattern: "^[0-9a-fA-F]{10}$",
+});
+
+const memberIdsArray = s.array("Member device IDs (10-character hex strings).", deviceIdParam);
 
 const iamResourceType = s.stringEnum(["org", "network-group", "network"], {
   description: "The ZeroTier v2 resource kind the IAM assignment applies to.",
 });
 
+const iamPrincipal = s.email("Email address of the user or service account.");
+
+const iamRole = s.stringEnum(
+  [
+    "Owner",
+    "Admin",
+    "Editor",
+    "Viewer",
+    "NetworkGroupAdmin",
+    "NetworkGroupEditor",
+    "NetworkGroupViewer",
+    "NetworkAdmin",
+    "NetworkEditor",
+    "NetworkViewer",
+  ],
+  {
+    description:
+      "A ZeroTier v2 IAM role. Org roles (Owner, Admin, Editor, Viewer) apply to every child resource; NetworkGroup* and Network* roles apply at that level and below.",
+  },
+);
+
+const iamRoles = (description: string) => s.array(description, iamRole, { minItems: 1, uniqueItems: true });
+
 const iamTupleSchema = s.requiredObject("A principal-to-roles assignment.", {
-  principal: s.nonEmptyString("Email address of the user or service account."),
-  roles: s.array(
-    "One or more ZeroTier IAM role names.",
-    s.nonEmptyString("An IAM role such as Owner, Admin, Editor, Viewer, NetworkGroupAdmin, or NetworkAdmin."),
-  ),
+  principal: iamPrincipal,
+  roles: iamRoles("One or more ZeroTier IAM roles."),
+});
+
+const webhookDescriptionParam = s.string("The webhook description (at most 255 characters).", { maxLength: 255 });
+
+const webhookEventList = s.array("ZeroTier event types to subscribe to.", s.nonEmptyString("An event type."), {
+  minItems: 1,
 });
 
 export const zerotierActions: ActionDefinition[] = [
@@ -484,8 +514,8 @@ export const zerotierActions: ActionDefinition[] = [
       {
         resourceType: iamResourceType,
         resourceId: s.nonEmptyString("The resource ID."),
-        principal: s.nonEmptyString("Email of the user or service account."),
-        roles: s.array("IAM roles to add.", s.nonEmptyString("An IAM role name.")),
+        principal: iamPrincipal,
+        roles: iamRoles("IAM roles to add."),
       },
       { required: ["resourceType", "resourceId", "principal", "roles"] },
     ),
@@ -516,8 +546,8 @@ export const zerotierActions: ActionDefinition[] = [
       {
         resourceType: iamResourceType,
         resourceId: s.nonEmptyString("The resource ID."),
-        principal: s.nonEmptyString("Email of the user or service account."),
-        roles: s.array("IAM roles to remove.", s.nonEmptyString("An IAM role name.")),
+        principal: iamPrincipal,
+        roles: iamRoles("IAM roles to remove."),
       },
       { required: ["resourceType", "resourceId", "principal", "roles"] },
     ),
@@ -683,8 +713,8 @@ export const zerotierActions: ActionDefinition[] = [
       {
         orgId: orgIdParam,
         url: s.url("The HTTPS endpoint URL that receives webhook events (FQDN only, no raw IPs or private ranges)."),
-        eventList: s.array("ZeroTier event types to subscribe to.", s.nonEmptyString("An event type.")),
-        description: descriptionParam,
+        eventList: webhookEventList,
+        description: webhookDescriptionParam,
       },
       { required: ["orgId", "url", "eventList"] },
     ),
@@ -710,8 +740,8 @@ export const zerotierActions: ActionDefinition[] = [
       {
         webhookId: s.nonEmptyString("The webhook ID."),
         url: s.url("The HTTPS endpoint URL that receives webhook events."),
-        eventList: s.array("ZeroTier event types to subscribe to.", s.nonEmptyString("An event type.")),
-        description: descriptionParam,
+        eventList: webhookEventList,
+        description: webhookDescriptionParam,
       },
       { required: ["webhookId"] },
     ),
@@ -737,7 +767,8 @@ export const zerotierActions: ActionDefinition[] = [
       {
         webhookId: s.nonEmptyString("The webhook ID."),
         overlapHours: s.integer(
-          "Hours the previous secret stays valid after rotation (0 = immediate cutover, default 24).",
+          "Hours the previous secret stays valid after rotation (0 = immediate cutover, at most 720, default 24).",
+          { minimum: 0, maximum: 720 },
         ),
       },
       { required: ["webhookId"] },
@@ -808,7 +839,7 @@ export const zerotierActions: ActionDefinition[] = [
           s.object(
             "One member to add.",
             {
-              deviceId: memberIdParam,
+              deviceId: deviceIdParam,
               name: nameParam,
               description: descriptionParam,
               activeBridge: s.boolean("Whether this device acts as an active bridge."),

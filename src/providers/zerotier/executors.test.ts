@@ -496,6 +496,60 @@ describe("ZeroTier action schemas", () => {
     expect(action("add_iam").operationType).toBe("write");
   });
 
+  it("accepts only upstream IAM roles and email principals", () => {
+    const addIam = action("add_iam");
+    const input = (principal: string, roles: string[]) => ({
+      resourceType: "org",
+      resourceId: "org1",
+      principal,
+      roles,
+    });
+    expect(validateActionInput(addIam, input("alice@example.com", ["Admin", "NetworkViewer"])).valid).toBe(true);
+    expect(validateActionInput(addIam, input("alice@example.com", [])).valid).toBe(false);
+    expect(validateActionInput(addIam, input("alice@example.com", ["Superuser"])).valid).toBe(false);
+    expect(validateActionInput(addIam, input("alice@example.com", ["Admin", "Admin"])).valid).toBe(false);
+    expect(validateActionInput(addIam, input("alice", ["Admin"])).valid).toBe(false);
+    expect(
+      validateActionInput(action("replace_iam"), {
+        resourceType: "network",
+        resourceId: "nw1",
+        assignments: [{ principal: "bob@example.com", roles: ["Owner"] }],
+      }).valid,
+    ).toBe(true);
+    expect(
+      validateActionInput(action("replace_iam"), {
+        resourceType: "network",
+        resourceId: "nw1",
+        assignments: [{ principal: "bob@example.com", roles: ["Root"] }],
+      }).valid,
+    ).toBe(false);
+  });
+
+  it("applies the upstream webhook limits", () => {
+    const createWebhook = action("create_webhook");
+    const webhook = { orgId: "org1", url: "https://hooks.example.com/zt", eventList: ["network.created"] };
+    expect(validateActionInput(createWebhook, webhook).valid).toBe(true);
+    expect(validateActionInput(createWebhook, { ...webhook, eventList: [] }).valid).toBe(false);
+    expect(validateActionInput(createWebhook, { ...webhook, description: "x".repeat(256) }).valid).toBe(false);
+    expect(validateActionInput(action("update_webhook"), { webhookId: "wh1", eventList: [] }).valid).toBe(false);
+
+    const rotate = action("rotate_webhook_secret");
+    expect(validateActionInput(rotate, { webhookId: "wh1", overlapHours: 0 }).valid).toBe(true);
+    expect(validateActionInput(rotate, { webhookId: "wh1", overlapHours: 720 }).valid).toBe(true);
+    expect(validateActionInput(rotate, { webhookId: "wh1", overlapHours: 721 }).valid).toBe(false);
+    expect(validateActionInput(rotate, { webhookId: "wh1", overlapHours: -1 }).valid).toBe(false);
+  });
+
+  it("requires 10-hex-digit device IDs for the v2 batch member actions", () => {
+    expect(validateActionInput(action("remove_members"), { networkId: "nw1", deviceIds: ["abcdef0123"] }).valid).toBe(
+      true,
+    );
+    expect(validateActionInput(action("authorize_members"), { networkId: "nw1", deviceIds: [".."] }).valid).toBe(false);
+    expect(
+      validateActionInput(action("add_members"), { networkId: "nw1", members: [{ deviceId: "abcdef012" }] }).valid,
+    ).toBe(false);
+  });
+
   it("only requires deviceId for each member added in bulk", () => {
     const addMembers = action("add_members");
     expect(validateActionInput(addMembers, { networkId: "nw1", members: [{ deviceId: "abcdef0123" }] }).valid).toBe(
