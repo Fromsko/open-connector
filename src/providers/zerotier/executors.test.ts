@@ -101,6 +101,21 @@ describe("ZeroTier v1 request shaping", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("reads the current user's org on v1 without using the v2-only connection orgId", async () => {
+    const fetcher = jsonFetcher({ id: "org-mine" }, (url) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/org`);
+    });
+    const result = await zerotierActionHandlers.get_org({}, v1Context(fetcher, { orgId: "org-x" }));
+    expect(result).toEqual({ result: { id: "org-mine" } });
+    expect(fetcher).toHaveBeenCalledOnce();
+
+    const explicit = jsonFetcher({ id: "org-y" }, (url) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/org/org-y`);
+    });
+    await zerotierActionHandlers.get_org({ orgId: "org-y" }, v1Context(explicit, { orgId: "org-x" }));
+    expect(explicit).toHaveBeenCalledOnce();
+  });
+
   it.each([{ ipv4Assignments: ["10.0.0.1"] }, { ipv6Assignments: ["fd00::1"] }])(
     "rejects the v2-only member field %j on v1 before any request",
     async (fields) => {
@@ -139,6 +154,24 @@ describe("ZeroTier v2 request shaping", () => {
       expect(url).toBe(`${zerotierV2BaseUrl}/network?org-id=org-explicit&stats=true`);
     });
     await zerotierActionHandlers.list_networks({ orgId: "org-explicit", stats: true }, v2Context(fetcher));
+  });
+
+  it("falls back to the connection orgId for get_org", async () => {
+    const fetcher = jsonFetcher({ id: "org-default" }, (url) => {
+      expect(url).toBe(`${zerotierV2BaseUrl}/org/org-default`);
+    });
+    await zerotierActionHandlers.get_org({}, v2Context(fetcher));
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("rejects get_org on v2 when neither the input nor the connection names an org", async () => {
+    const fetcher = jsonFetcher({});
+    const error = await zerotierActionHandlers
+      .get_org({}, v2Context(fetcher, { orgId: "" }))
+      .catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(400);
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("routes bulk member updates to the member endpoints", async () => {

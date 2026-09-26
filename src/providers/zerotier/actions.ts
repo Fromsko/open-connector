@@ -238,10 +238,10 @@ export const zerotierActions: ActionDefinition[] = [
     name: "get_org",
     operationType: "read",
     description:
-      "Get a ZeroTier organization. For v1, returns the current user's org when orgId is omitted, or /org/{orgId}. For v2, orgId is required.",
+      "Get a ZeroTier organization. For v1, returns the current user's org when orgId is omitted, or /org/{orgId}. For v2, uses orgId or falls back to the connection's orgId; one of them is required.",
     inputSchema: s.object(
       "Input for fetching an organization.",
-      { orgId: s.string("The organization ID (required for v2).") },
+      { orgId: s.string("The organization ID. v2 falls back to the connection's orgId when omitted; v1 does not.") },
       { required: [] },
     ),
     outputSchema: singleOutput("The ZeroTier organization object."),

@@ -242,13 +242,15 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
   },
 
   async get_org(input, ctx) {
-    const orgId = zerotierOrgId(ctx, input);
     if (ctx.apiVersion === "v2") {
+      const orgId = zerotierOrgId(ctx, input);
       if (!orgId) {
         throw providerInputError("orgId is required for v2 (no credential orgId configured either).");
       }
       return zerotierResult(await zerotierRequest(ctx, { path: `/org/${zerotierPathSegment(orgId, "orgId")}` }));
     }
+    // The connection orgId is a v2-only default, so v1 reads the current user's org unless the input names one.
+    const orgId = optionalString(input.orgId);
     return zerotierResult(
       await zerotierRequest(ctx, { path: orgId ? `/org/${zerotierPathSegment(orgId, "orgId")}` : "/org" }),
     );
