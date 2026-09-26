@@ -10,9 +10,10 @@ import type { ZerotierActionContext } from "./runtime.ts";
 
 import {
   compactObject,
+  objectArray,
   optionalBoolean,
   optionalNumber,
-  optionalObjectArray,
+  optionalRawString,
   optionalRecord,
   optionalString,
   optionalStringArray,
@@ -89,8 +90,8 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         throw providerInputError("networkGroupId is required for v2 (the network group the network is created under).");
       }
       const body = compactObject({
-        name: optionalString(input.name),
-        description: optionalString(input.description),
+        name: requiredInputString(input.name, "name"),
+        description: optionalRawString(input.description),
         config: input.config,
       });
       return zerotierResult(
@@ -105,7 +106,13 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
     if (input.name !== undefined) {
       config.name = input.name;
     }
-    return zerotierResult(await zerotierRequest(ctx, { method: "POST", path: "/network", body: { config } }));
+    return zerotierResult(
+      await zerotierRequest(ctx, {
+        method: "POST",
+        path: "/network",
+        body: compactObject({ config, description: optionalRawString(input.description) }),
+      }),
+    );
   },
 
   async update_network(input, ctx) {
@@ -113,7 +120,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
     if (ctx.apiVersion === "v2") {
       const body = compactObject({
         name: optionalString(input.name),
-        description: optionalString(input.description),
+        description: optionalRawString(input.description),
         config: input.config,
       });
       return zerotierResult(await zerotierRequest(ctx, { method: "POST", path: `/network/${networkId}`, body }));
@@ -126,7 +133,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/network/${networkId}`,
-        body: compactObject({ config, description: optionalString(input.description) }),
+        body: compactObject({ config, description: optionalRawString(input.description) }),
       }),
     );
   },
@@ -156,7 +163,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
           path,
           body: compactObject({
             name: optionalString(input.name),
-            description: optionalString(input.description),
+            description: optionalRawString(input.description),
             activeBridge: optionalBoolean(input.activeBridge),
             noAutoAssignIps: optionalBoolean(input.noAutoAssignIps),
             ipv4Assignments: optionalStringArray(input.ipv4Assignments),
@@ -177,7 +184,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         path,
         body: compactObject({
           name: optionalString(input.name),
-          description: optionalString(input.description),
+          description: optionalRawString(input.description),
           config,
         }),
       }),
@@ -297,7 +304,6 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         path: `/user/${id(input, "userId")}`,
         body: compactObject({
           displayName: optionalString(input.displayName),
-          email: optionalString(input.email),
           smsNumber: optionalString(input.smsNumber),
         }),
       }),
@@ -315,7 +321,10 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/user/${id(input, "userId")}/token`,
-        body: { tokenName: requiredInputString(input.tokenName, "tokenName") },
+        body: {
+          tokenName: requiredInputString(input.tokenName, "tokenName"),
+          token: requiredInputString(input.token, "token"),
+        },
       }),
     );
   },
@@ -387,7 +396,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         path: `/org/${id(input, "orgId")}/network-group`,
         body: compactObject({
           name: requiredInputString(input.name, "name"),
-          description: optionalString(input.description),
+          description: optionalRawString(input.description),
         }),
       }),
     );
@@ -401,7 +410,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         path: `/network-group/${id(input, "networkGroupId")}`,
         body: compactObject({
           name: optionalString(input.name),
-          description: optionalString(input.description),
+          description: optionalRawString(input.description),
         }),
       }),
     );
@@ -433,7 +442,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
 
   async add_iam(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
-    return zerotierList(
+    return zerotierStatus(
       await zerotierRequest(ctx, {
         method: "POST",
         path: iamResourcePath(input),
@@ -449,18 +458,18 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
 
   async replace_iam(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
-    return zerotierList(
+    return zerotierStatus(
       await zerotierRequest(ctx, {
         method: "PUT",
         path: iamResourcePath(input),
-        body: optionalObjectArray(input.assignments, "assignments"),
+        body: objectArray(input.assignments, "assignments", providerInputError),
       }),
     );
   },
 
   async remove_iam(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
-    return zerotierList(
+    return zerotierStatus(
       await zerotierRequest(ctx, {
         method: "DELETE",
         path: iamResourcePath(input),
@@ -521,7 +530,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         body: compactObject({
           id: requiredInputString(input.id, "id"),
           name: requiredInputString(input.name, "name"),
-          description: optionalString(input.description),
+          description: optionalRawString(input.description),
         }),
       }),
     );
@@ -540,7 +549,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         path: `/service-account/${id(input, "serviceAccountId")}`,
         body: compactObject({
           name: optionalString(input.name),
-          description: optionalString(input.description),
+          description: optionalRawString(input.description),
         }),
       }),
     );
@@ -561,7 +570,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         path: `/service-account/${id(input, "serviceAccountId")}/api-key`,
         body: compactObject({
           expires: requiredInputString(input.expires, "expires"),
-          description: optionalString(input.description),
+          description: optionalRawString(input.description),
         }),
       }),
     );
@@ -578,7 +587,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/api-key/${id(input, "apiKeyId")}`,
-        body: compactObject({ description: optionalString(input.description) }),
+        body: compactObject({ description: optionalRawString(input.description) }),
       }),
     );
   },
@@ -602,7 +611,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         body: compactObject({
           url: requiredInputString(input.url, "url"),
           eventList: requiredStrings(input.eventList, "eventList"),
-          description: optionalString(input.description),
+          description: optionalRawString(input.description),
         }),
       }),
     );
@@ -622,7 +631,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         body: compactObject({
           url: optionalString(input.url),
           eventList: optionalStringArray(input.eventList),
-          description: optionalString(input.description),
+          description: optionalRawString(input.description),
         }),
       }),
     );
@@ -683,7 +692,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/network/${id(input, "networkId")}/member`,
-        body: optionalObjectArray(input.members, "members"),
+        body: objectArray(input.members, "members", providerInputError),
       }),
     );
   },
@@ -691,14 +700,14 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
   async remove_members(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
     const body = requiredStrings(input.deviceIds, "deviceIds").map((deviceId) => ({ deviceId }));
-    return zerotierList(
+    return zerotierStatus(
       await zerotierRequest(ctx, { method: "DELETE", path: `/network/${id(input, "networkId")}/member`, body }),
     );
   },
 
   async authorize_members(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
-    return zerotierList(
+    return zerotierStatus(
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/network/${id(input, "networkId")}/member/authorize`,
@@ -709,7 +718,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
 
   async deauthorize_members(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
-    return zerotierList(
+    return zerotierStatus(
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/network/${id(input, "networkId")}/member/de-authorize`,
@@ -720,7 +729,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
 
   async reject_members(input, ctx) {
     requireZerotierApiVersion(ctx, "v2");
-    return zerotierList(
+    return zerotierStatus(
       await zerotierRequest(ctx, {
         method: "POST",
         path: `/network/${id(input, "networkId")}/member/reject`,

@@ -13,6 +13,7 @@ const singleOutput = (description: string) =>
 const listOutput = (description: string) =>
   s.requiredObject(description, {
     items: s.array("The ZeroTier API resources returned for this request.", s.unknown("One ZeroTier API resource.")),
+    stats: s.optional(s.unknown("v2 only: aggregate statistics returned when stats was requested.")),
   });
 
 const statusOutput = (description: string) =>
@@ -81,12 +82,12 @@ export const zerotierActions: ActionDefinition[] = [
     name: "create_network",
     operationType: "write",
     description:
-      "Create a ZeroTier network. For v1 sends {config}; for v2 sends {name, description, config} and requires networkGroupId (the group the network is created under).",
+      "Create a ZeroTier network. For v1 sends {config, description}; for v2 sends {name, description, config} and requires networkGroupId (the group the network is created under) and name.",
     inputSchema: s.object(
       "Input for creating a ZeroTier network.",
       {
         networkGroupId: s.string("v2 only, required: the network group ID to create the network under."),
-        name: nameParam,
+        name: s.string("The network name (required for v2)."),
         description: descriptionParam,
         config: s.looseObject(
           "Network configuration. v1 accepts name/private/enableBroadcast/mtu/multicastLimit/routes/ipAssignmentPools/v4AssignMode/v6AssignMode/dns; v2 accepts private/enableBroadcast/mtu/multicastLimit/routes/v4Subnet/v4IpAssignmentPools/v4AssignmentMode/v6Subnet/v6IpAssignmentPools/v6AssignmentMode/dns.",
@@ -309,8 +310,7 @@ export const zerotierActions: ActionDefinition[] = [
       {
         userId: s.nonEmptyString("The user ID."),
         displayName: s.string("The display name to set."),
-        email: s.string("The email address to set."),
-        smsNumber: s.string("The SMS number to set."),
+        smsNumber: s.string("The SMS number to set (deprecated by ZeroTier)."),
       },
       { required: ["userId"] },
     ),
@@ -330,13 +330,18 @@ export const zerotierActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "add_user_token",
     operationType: "write",
-    description: "v1 only: create an API token for a user. The token value is returned once.",
+    description:
+      "v1 only: register an API token for a user. The caller supplies the token value (get_random_token generates one); it cannot be retrieved after it is set.",
     inputSchema: s.object(
       "Input for creating a user API token.",
-      { userId: s.nonEmptyString("The user ID."), tokenName: s.nonEmptyString("A name for the new token.") },
-      { required: ["userId", "tokenName"] },
+      {
+        userId: s.nonEmptyString("The user ID."),
+        tokenName: s.nonEmptyString("A name for the new token."),
+        token: s.string("The API token value to register, at least 32 characters.", { minLength: 32 }),
+      },
+      { required: ["userId", "tokenName", "token"] },
     ),
-    outputSchema: singleOutput("The created API token (secret shown once)."),
+    outputSchema: singleOutput("The created API token record."),
   }),
   defineProviderAction(service, {
     name: "delete_user_token",
@@ -483,7 +488,7 @@ export const zerotierActions: ActionDefinition[] = [
       },
       { required: ["resourceType", "resourceId", "principal", "roles"] },
     ),
-    outputSchema: listOutput("The resulting IAM assignments."),
+    outputSchema: statusOutput("IAM update result."),
   }),
   defineProviderAction(service, {
     name: "replace_iam",
@@ -498,7 +503,7 @@ export const zerotierActions: ActionDefinition[] = [
       },
       { required: ["resourceType", "resourceId", "assignments"] },
     ),
-    outputSchema: listOutput("The resulting IAM assignments."),
+    outputSchema: statusOutput("IAM update result."),
   }),
   defineProviderAction(service, {
     name: "remove_iam",
@@ -514,7 +519,7 @@ export const zerotierActions: ActionDefinition[] = [
       },
       { required: ["resourceType", "resourceId", "principal", "roles"] },
     ),
-    outputSchema: listOutput("The resulting IAM assignments."),
+    outputSchema: statusOutput("IAM update result."),
   }),
   defineProviderAction(service, {
     name: "get_org_iam_tree",
@@ -798,15 +803,19 @@ export const zerotierActions: ActionDefinition[] = [
         networkId: networkIdParam,
         members: s.array(
           "Members to add.",
-          s.requiredObject("One member to add.", {
-            deviceId: memberIdParam,
-            name: nameParam,
-            description: descriptionParam,
-            activeBridge: s.boolean("Whether this device acts as an active bridge."),
-            noAutoAssignIps: s.boolean("Disable automatic IP assignment."),
-            ipv4Assignments: s.stringArray("Static IPv4 assignments."),
-            ipv6Assignments: s.stringArray("Static IPv6 assignments."),
-          }),
+          s.object(
+            "One member to add.",
+            {
+              deviceId: memberIdParam,
+              name: nameParam,
+              description: descriptionParam,
+              activeBridge: s.boolean("Whether this device acts as an active bridge."),
+              noAutoAssignIps: s.boolean("Disable automatic IP assignment."),
+              ipv4Assignments: s.stringArray("Static IPv4 assignments."),
+              ipv6Assignments: s.stringArray("Static IPv6 assignments."),
+            },
+            { required: ["deviceId"] },
+          ),
         ),
       },
       { required: ["networkId", "members"] },
@@ -822,7 +831,7 @@ export const zerotierActions: ActionDefinition[] = [
       { networkId: networkIdParam, deviceIds: memberIdsArray },
       { required: ["networkId", "deviceIds"] },
     ),
-    outputSchema: listOutput("The removal result."),
+    outputSchema: statusOutput("Removal result."),
   }),
   defineProviderAction(service, {
     name: "authorize_members",
@@ -833,7 +842,7 @@ export const zerotierActions: ActionDefinition[] = [
       { networkId: networkIdParam, deviceIds: memberIdsArray },
       { required: ["networkId", "deviceIds"] },
     ),
-    outputSchema: listOutput("The authorized members."),
+    outputSchema: statusOutput("Authorization result."),
   }),
   defineProviderAction(service, {
     name: "deauthorize_members",
@@ -844,7 +853,7 @@ export const zerotierActions: ActionDefinition[] = [
       { networkId: networkIdParam, deviceIds: memberIdsArray },
       { required: ["networkId", "deviceIds"] },
     ),
-    outputSchema: listOutput("The de-authorized members."),
+    outputSchema: statusOutput("De-authorization result."),
   }),
   defineProviderAction(service, {
     name: "reject_members",
@@ -855,7 +864,7 @@ export const zerotierActions: ActionDefinition[] = [
       { networkId: networkIdParam, deviceIds: memberIdsArray },
       { required: ["networkId", "deviceIds"] },
     ),
-    outputSchema: listOutput("The rejected members."),
+    outputSchema: statusOutput("Rejection result."),
   }),
   defineProviderAction(service, {
     name: "reject_member",
@@ -883,7 +892,7 @@ export const zerotierActions: ActionDefinition[] = [
       "Input for updating flow rules.",
       {
         networkId: networkIdParam,
-        kind: s.nonEmptyString("The flow rule kind (e.g. custom, isolation)."),
+        kind: s.stringEnum(["custom", "isolation"], { description: "The flow rule kind." }),
         config: s.looseObject(
           "The flow rule config. For custom rules: {source: '<rules source>'}. For isolation: {allowedServices, blockNonIP, enableServiceFilter, excludedDeviceIds}.",
         ),

@@ -128,7 +128,11 @@ export function requireZerotierApiVersion(context: ZerotierActionContext, versio
   }
 }
 
-/** Wrap a ZeroTier array response into the action list envelope. */
+/**
+ * Wrap a ZeroTier array response into the action list envelope. v2 list
+ * endpoints answer `{ items, stats? }`; the aggregate `stats` requested with
+ * `stats=true` is kept next to the items.
+ */
 export function zerotierList(payload: unknown): Record<string, unknown> {
   if (payload === null || payload === undefined) {
     return { items: [] };
@@ -138,7 +142,7 @@ export function zerotierList(payload: unknown): Record<string, unknown> {
   }
   const record = optionalRecord(payload);
   if (record && Array.isArray(record.items)) {
-    return { items: record.items };
+    return { items: record.items, stats: record.stats };
   }
   return { items: [payload] };
 }

@@ -35,6 +35,36 @@ describe("ZeroTier auth headers", () => {
   });
 });
 
+describe("ZeroTier v1 request shaping", () => {
+  it("registers the caller-supplied token value for a user", async () => {
+    const token = "wwrb66uUh18Fqc38rd8jMd5RFJzRsCn4";
+    const fetcher = jsonFetcher({ tokenName: "ci" }, (url, init) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/user/u1/token`);
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({ tokenName: "ci", token });
+    });
+    const result = await zerotierActionHandlers.add_user_token(
+      { userId: "u1", tokenName: "ci", token },
+      v1Context(fetcher),
+    );
+    expect(result).toEqual({ result: { tokenName: "ci" } });
+  });
+
+  it("creates a network with its config name and description", async () => {
+    const fetcher = jsonFetcher({ id: "nw1" }, (url, init) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/network`);
+      expect(JSON.parse(String(init?.body))).toEqual({
+        config: { name: "lab", private: true },
+        description: "Lab network",
+      });
+    });
+    await zerotierActionHandlers.create_network(
+      { name: "lab", description: "Lab network", config: { private: true } },
+      v1Context(fetcher),
+    );
+  });
+});
+
 describe("ZeroTier v2 request shaping", () => {
   it("falls back to the connection orgId for list_networks", async () => {
     const fetcher = jsonFetcher([], (url) => {
@@ -60,6 +90,43 @@ describe("ZeroTier v2 request shaping", () => {
     });
     const result = await zerotierActionHandlers.add_members({ networkId: "nw1", members }, v2Context(fetcher));
     expect(result).toEqual({ items: members });
+  });
+
+  it("reports bulk member mutations as a status envelope", async () => {
+    const fetcher = jsonFetcher({ message: "ok" }, (url, init) => {
+      expect(url).toBe(`${zerotierV2BaseUrl}/network/nw1/member/authorize`);
+      expect(JSON.parse(String(init?.body))).toEqual(["a", "b"]);
+    });
+    const result = await zerotierActionHandlers.authorize_members(
+      { networkId: "nw1", deviceIds: ["a", "b"] },
+      v2Context(fetcher),
+    );
+    expect(result).toEqual({ ok: true, result: { message: "ok" } });
+  });
+
+  it("keeps aggregate stats next to list items", async () => {
+    const fetcher = jsonFetcher({ items: [{ id: "org1", name: "Acme" }], stats: { totalOrgs: 1 } }, (url) => {
+      expect(url).toBe(`${zerotierV2BaseUrl}/org?stats=true`);
+    });
+    const result = await zerotierActionHandlers.list_orgs({ stats: true }, v2Context(fetcher));
+    expect(result).toEqual({ items: [{ id: "org1", name: "Acme" }], stats: { totalOrgs: 1 } });
+  });
+
+  it("requires a name when creating a v2 network", async () => {
+    const fetcher = jsonFetcher({});
+    const error = await zerotierActionHandlers
+      .create_network({ networkGroupId: "grp1" }, v2Context(fetcher))
+      .catch((err: unknown) => err);
+    expect((error as ProviderRequestError).status).toBe(400);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("sends an empty description so it can be cleared", async () => {
+    const fetcher = jsonFetcher({}, (url, init) => {
+      expect(url).toBe(`${zerotierV2BaseUrl}/network/nw1`);
+      expect(JSON.parse(String(init?.body))).toEqual({ description: "" });
+    });
+    await zerotierActionHandlers.update_network({ networkId: "nw1", description: "" }, v2Context(fetcher));
   });
 
   it("sends flow rules to the v2beta base URL", async () => {
@@ -202,5 +269,22 @@ describe("ZeroTier action schemas", () => {
     expect(checkPermissions.operationType).toBe("read");
     expect(validateActionInput(checkPermissions, check("network_group")).valid).toBe(true);
     expect(validateActionInput(checkPermissions, check("networkGroup")).valid).toBe(false);
+  });
+
+  it("only requires deviceId for each member added in bulk", () => {
+    const addMembers = action("add_members");
+    expect(validateActionInput(addMembers, { networkId: "nw1", members: [{ deviceId: "abcdef0123" }] }).valid).toBe(
+      true,
+    );
+    expect(validateActionInput(addMembers, { networkId: "nw1", members: [{ name: "laptop" }] }).valid).toBe(false);
+  });
+
+  it("requires a token value of at least 32 characters for add_user_token", () => {
+    const addUserToken = action("add_user_token");
+    expect(validateActionInput(addUserToken, { userId: "u1", tokenName: "ci" }).valid).toBe(false);
+    expect(validateActionInput(addUserToken, { userId: "u1", tokenName: "ci", token: "short" }).valid).toBe(false);
+    expect(validateActionInput(addUserToken, { userId: "u1", tokenName: "ci", token: "x".repeat(32) }).valid).toBe(
+      true,
+    );
   });
 });
