@@ -132,7 +132,7 @@ describe("ZeroTier v2 request shaping", () => {
   });
 
   it("routes bulk member updates to the member endpoints", async () => {
-    const members = [{ deviceId: "a" }, { deviceId: "b" }];
+    const members = [{ deviceId: "abcdef0123" }, { deviceId: "0123456789" }];
     const fetcher = jsonFetcher(members, (url, init) => {
       expect(url).toBe(`${zerotierV2BaseUrl}/network/nw1/member`);
       expect(init?.method).toBe("POST");
@@ -145,10 +145,10 @@ describe("ZeroTier v2 request shaping", () => {
   it("reports bulk member mutations as a status envelope", async () => {
     const fetcher = jsonFetcher({ message: "ok" }, (url, init) => {
       expect(url).toBe(`${zerotierV2BaseUrl}/network/nw1/member/authorize`);
-      expect(JSON.parse(String(init?.body))).toEqual(["a", "b"]);
+      expect(JSON.parse(String(init?.body))).toEqual(["abcdef0123", "0123456789"]);
     });
     const result = await zerotierActionHandlers.authorize_members(
-      { networkId: "nw1", deviceIds: ["a", "b"] },
+      { networkId: "nw1", deviceIds: ["abcdef0123", "0123456789"] },
       v2Context(fetcher),
     );
     expect(result).toEqual({ ok: true, result: { message: "ok" } });
@@ -228,10 +228,15 @@ describe("ZeroTier v2 request shaping", () => {
   );
 
   it("maps IAM actions to the resource iam endpoint", async () => {
-    const fetcher = jsonFetcher({ tuples: [] }, (url) => {
+    const tuples = [{ principal: "alice@example.com", principalType: "user", roles: ["NetworkGroupAdmin"] }];
+    const fetcher = jsonFetcher(tuples, (url) => {
       expect(url).toBe(`${zerotierV2BaseUrl}/network-group/grp1/iam`);
     });
-    await zerotierActionHandlers.get_iam({ resourceType: "network-group", resourceId: "grp1" }, v2Context(fetcher));
+    const result = await zerotierActionHandlers.get_iam(
+      { resourceType: "network-group", resourceId: "grp1" },
+      v2Context(fetcher),
+    );
+    expect(result).toEqual({ items: tuples });
   });
 });
 
