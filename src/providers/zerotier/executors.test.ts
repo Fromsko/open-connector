@@ -124,8 +124,9 @@ describe("ZeroTier error propagation", () => {
 });
 
 describe("ZeroTier credential validation", () => {
-  it("validates v1 credentials via GET /status", async () => {
-    const fetcher = jsonFetcher({ type: "API_TOKEN", clock: 1 }, (url, init) => {
+  it("validates v1 credentials via GET /status and identifies the token user", async () => {
+    const status = { type: "CentralStatus", clock: 1, user: { id: "user-1", displayName: "Joe User" } };
+    const fetcher = jsonFetcher(status, (url, init) => {
       expect(url).toBe(`${zerotierV1BaseUrl}/status`);
       expect(new Headers(init?.headers).get("authorization")).toBe("token v1-key");
     });
@@ -133,12 +134,22 @@ describe("ZeroTier credential validation", () => {
       { values: { apiVersion: "v1", apiKey: "v1-key" } },
       { fetcher },
     );
-    expect(result?.profile?.displayName).toBe("ZeroTier Central v1");
+    expect(result?.profile).toEqual({ accountId: "user-1", displayName: "Joe User" });
     expect(result?.metadata?.apiBaseUrl).toBe(zerotierV1BaseUrl);
   });
 
-  it("validates v2 credentials via GET /org", async () => {
-    const fetcher = jsonFetcher({ displayName: "Acme Org", id: "org1" }, (url, init) => {
+  it("rejects v1 credentials whose status carries no user", async () => {
+    const fetcher = jsonFetcher({ type: "CentralStatus", clock: 1, user: null });
+    const error = await credentialValidators.customCredential!(
+      { values: { apiVersion: "v1", apiKey: "bad-key" } },
+      { fetcher },
+    ).catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ProviderRequestError);
+    expect((error as ProviderRequestError).status).toBe(401);
+  });
+
+  it("validates v2 credentials via GET /org and identifies the service account organization", async () => {
+    const fetcher = jsonFetcher({ items: [{ id: "org1", name: "Acme Org" }] }, (url, init) => {
       expect(url).toBe(`${zerotierV2BaseUrl}/org`);
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer v2-key");
     });
@@ -146,7 +157,35 @@ describe("ZeroTier credential validation", () => {
       { values: { apiVersion: "v2", apiKey: "v2-key" } },
       { fetcher },
     );
-    expect(result?.profile?.displayName).toBe("ZeroTier New Central v2");
+    expect(result?.profile).toEqual({ accountId: "org1", displayName: "Acme Org" });
     expect(result?.metadata?.apiBaseUrl).toBe(zerotierV2BaseUrl);
+  });
+
+  it("uses the configured orgId to pick among several v2 organizations", async () => {
+    const orgs = {
+      items: [
+        { id: "org1", name: "Acme Org" },
+        { id: "org2", name: "Beta Org" },
+      ],
+    };
+    const result = await credentialValidators.customCredential!(
+      { values: { apiVersion: "v2", apiKey: "v2-key", orgId: "org2" } },
+      { fetcher: jsonFetcher(orgs) },
+    );
+    expect(result?.profile).toEqual({ accountId: "org2", displayName: "Beta Org" });
+  });
+
+  it("leaves the v2 account id to the runtime default when no single organization is identified", async () => {
+    const orgs = {
+      items: [
+        { id: "org1", name: "Acme Org" },
+        { id: "org2", name: "Beta Org" },
+      ],
+    };
+    const result = await credentialValidators.customCredential!(
+      { values: { apiVersion: "v2", apiKey: "v2-key" } },
+      { fetcher: jsonFetcher(orgs) },
+    );
+    expect(result?.profile).toEqual({ accountId: undefined, displayName: "ZeroTier New Central v2" });
   });
 });

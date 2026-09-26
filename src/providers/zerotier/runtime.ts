@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
 
-import { optionalRecord, optionalString } from "../../core/cast.ts";
+import { looseArray, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   providerInputError,
   providerUserAgent,
@@ -161,6 +161,45 @@ export function zerotierOrgId(context: ZerotierActionContext, input: Record<stri
 const v1ValidationEndpoint = "/status";
 const v2ValidationEndpoint = "/org";
 
+interface ZerotierCredentialAccount {
+  /** Provider-side identity; undefined lets the runtime derive its default account id. */
+  accountId?: string;
+  displayName: string;
+}
+
+/**
+ * Legacy Central reports the token's user under `user` on GET /status. The
+ * status document itself is not an authorization check, so a response without
+ * a user means the token did not authenticate.
+ */
+function readV1Account(payload: unknown): ZerotierCredentialAccount {
+  const user = optionalRecord(optionalRecord(payload)?.user);
+  const accountId = optionalString(user?.id);
+  if (!accountId) {
+    throw new ProviderRequestError(401, "ZeroTier did not return a user for this API token.");
+  }
+  return {
+    accountId,
+    displayName: optionalString(user?.displayName) ?? optionalString(user?.email) ?? "ZeroTier Central v1",
+  };
+}
+
+/**
+ * New Central GET /org lists the organizations the service account can reach.
+ * A service account belongs to one organization, which identifies the account;
+ * the configured orgId picks the organization when several are listed. When
+ * no single organization is identified the runtime default account id applies.
+ */
+function readV2Account(payload: unknown, orgId: string | undefined): ZerotierCredentialAccount {
+  const orgs = looseArray(optionalRecord(payload)?.items).map((item) => optionalRecord(item));
+  const configuredOrg = orgId ? orgs.find((item) => optionalString(item?.id) === orgId) : undefined;
+  const org = configuredOrg ?? (orgs.length === 1 ? orgs[0] : undefined);
+  return {
+    accountId: optionalString(org?.id),
+    displayName: optionalString(org?.name) ?? "ZeroTier New Central v2",
+  };
+}
+
 /**
  * Verify a ZeroTier credential against the API generation it selects: v1 calls
  * GET /status on Legacy Central, v2 calls GET /org on New Central.
@@ -173,16 +212,11 @@ export async function validateZerotierCredential(
   const context = createZerotierContext(values, fetcher, signal);
   const path = context.apiVersion === "v1" ? v1ValidationEndpoint : v2ValidationEndpoint;
   const payload = await zerotierRequest(context, { path });
-
-  const record = optionalRecord(payload);
-  const displayName =
-    context.apiVersion === "v1"
-      ? (optionalString(optionalRecord(record?.user)?.displayName) ?? "ZeroTier Central v1")
-      : "ZeroTier New Central v2";
+  const account = context.apiVersion === "v1" ? readV1Account(payload) : readV2Account(payload, context.orgId);
   return {
     profile: {
-      accountId: `zerotier-${context.apiVersion}`,
-      displayName,
+      accountId: account.accountId,
+      displayName: account.displayName,
     },
     grantedScopes: [],
     metadata: {
