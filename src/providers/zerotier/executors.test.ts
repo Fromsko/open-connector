@@ -77,6 +77,33 @@ describe("ZeroTier v1 request shaping", () => {
     expect(result).toEqual({ result: { id: "u1", r: true, a: false, m: false, d: false } });
   });
 
+  it("nests v1 member fields under config", async () => {
+    const fetcher = jsonFetcher({ id: "abcdef0123" }, (url, init) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/network/nw1/member/abcdef0123`);
+      expect(JSON.parse(String(init?.body))).toEqual({
+        name: "laptop",
+        config: { authorized: false, ipAssignments: ["10.0.0.1"] },
+      });
+    });
+    await zerotierActionHandlers.update_member(
+      { networkId: "nw1", memberId: "abcdef0123", name: "laptop", authorized: false, ipAssignments: ["10.0.0.1"] },
+      v1Context(fetcher),
+    );
+  });
+
+  it.each([{ ipv4Assignments: ["10.0.0.1"] }, { ipv6Assignments: ["fd00::1"] }])(
+    "rejects the v2-only member field %j on v1 before any request",
+    async (fields) => {
+      const fetcher = jsonFetcher({});
+      const error = await zerotierActionHandlers
+        .update_member({ networkId: "nw1", memberId: "abcdef0123", ...fields }, v1Context(fetcher))
+        .catch((err: unknown) => err);
+      expect(error).toBeInstanceOf(ProviderRequestError);
+      expect((error as ProviderRequestError).status).toBe(400);
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects network user permissions on v2 connections", async () => {
     const fetcher = jsonFetcher({});
     const error = await zerotierActionHandlers
@@ -158,6 +185,47 @@ describe("ZeroTier v2 request shaping", () => {
     });
     await zerotierActionHandlers.get_flow_rules({ networkId: "nw1" }, v2Context(fetcher));
   });
+
+  it("sends only the UpdateMemberRequest fields for a v2 member update", async () => {
+    const fetcher = jsonFetcher({ deviceId: "abcdef0123" }, (url, init) => {
+      expect(url).toBe(`${zerotierV2BaseUrl}/network/nw1/member/abcdef0123`);
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        name: "laptop",
+        description: "",
+        activeBridge: false,
+        noAutoAssignIps: true,
+        ipv4Assignments: ["10.0.0.5"],
+        ipv6Assignments: ["fd00::5"],
+      });
+    });
+    await zerotierActionHandlers.update_member(
+      {
+        networkId: "nw1",
+        memberId: "abcdef0123",
+        name: "laptop",
+        description: "",
+        activeBridge: false,
+        noAutoAssignIps: true,
+        ipv4Assignments: ["10.0.0.5"],
+        ipv6Assignments: ["fd00::5"],
+      },
+      v2Context(fetcher),
+    );
+  });
+
+  it.each([{ authorized: false }, { authorized: true }, { ipAssignments: ["10.0.0.1"] }])(
+    "rejects the v1-only member field %j on v2 before any request",
+    async (fields) => {
+      const fetcher = jsonFetcher({});
+      const error = await zerotierActionHandlers
+        .update_member({ networkId: "nw1", memberId: "abcdef0123", ...fields }, v2Context(fetcher))
+        .catch((err: unknown) => err);
+      expect(error).toBeInstanceOf(ProviderRequestError);
+      expect((error as ProviderRequestError).status).toBe(400);
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
 
   it("maps IAM actions to the resource iam endpoint", async () => {
     const fetcher = jsonFetcher({ tuples: [] }, (url) => {

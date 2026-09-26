@@ -152,7 +152,7 @@ export const zerotierActions: ActionDefinition[] = [
     name: "update_member",
     operationType: "write",
     description:
-      "Update a network member. v1 fields: name, description, authorized, activeBridge, noAutoAssignIps, ipAssignments. v2 fields: name, description, activeBridge, noAutoAssignIps, ipv4Assignments, ipv6Assignments.",
+      "Update a network member. v1 fields: name, description, authorized, activeBridge, noAutoAssignIps, ipAssignments. v2 fields: name, description, activeBridge, noAutoAssignIps, ipv4Assignments, ipv6Assignments. Fields from the other API version are rejected; on v2 change authorization with authorize_member or deauthorize_member.",
     inputSchema: s.object(
       "Input for updating a network member.",
       {

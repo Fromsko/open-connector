@@ -155,6 +155,16 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
   async update_member(input, ctx) {
     const path = `/network/${id(input, "networkId")}/member/${id(input, "memberId")}`;
     if (ctx.apiVersion === "v2") {
+      // The v2 member update body has no authorization field; dropping it would
+      // report a de-authorization that never happened.
+      if (input.authorized !== undefined) {
+        throw providerInputError(
+          "authorized is not supported by the v2 member update; use authorize_member or deauthorize_member.",
+        );
+      }
+      if (input.ipAssignments !== undefined) {
+        throw providerInputError("ipAssignments is v1 only; use ipv4Assignments/ipv6Assignments on v2.");
+      }
       return zerotierResult(
         await zerotierRequest(ctx, {
           method: "POST",
@@ -169,6 +179,9 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
           }),
         }),
       );
+    }
+    if (input.ipv4Assignments !== undefined || input.ipv6Assignments !== undefined) {
+      throw providerInputError("ipv4Assignments/ipv6Assignments are v2 only; use ipAssignments on v1.");
     }
     const config = compactObject({
       authorized: optionalBoolean(input.authorized),
