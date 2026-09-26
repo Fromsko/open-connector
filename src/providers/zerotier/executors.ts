@@ -117,7 +117,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
     const networkId = id(input, "networkId");
     if (ctx.apiVersion === "v2") {
       const body = compactObject({
-        name: optionalString(input.name),
+        name: optionalRawString(input.name),
         description: optionalRawString(input.description),
         config: input.config,
       });
@@ -170,7 +170,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
           method: "POST",
           path,
           body: compactObject({
-            name: optionalString(input.name),
+            name: optionalRawString(input.name),
             description: optionalRawString(input.description),
             activeBridge: optionalBoolean(input.activeBridge),
             noAutoAssignIps: optionalBoolean(input.noAutoAssignIps),
@@ -194,7 +194,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         method: "POST",
         path,
         body: compactObject({
-          name: optionalString(input.name),
+          name: optionalRawString(input.name),
           description: optionalRawString(input.description),
           config,
         }),
@@ -317,8 +317,8 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         method: "POST",
         path: `/user/${id(input, "userId")}`,
         body: compactObject({
-          displayName: optionalString(input.displayName),
-          smsNumber: optionalString(input.smsNumber),
+          displayName: optionalRawString(input.displayName),
+          smsNumber: optionalRawString(input.smsNumber),
         }),
       }),
     );
@@ -423,7 +423,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         method: "POST",
         path: `/network-group/${id(input, "networkGroupId")}`,
         body: compactObject({
-          name: optionalString(input.name),
+          name: optionalRawString(input.name),
           description: optionalRawString(input.description),
         }),
       }),
@@ -562,7 +562,7 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         method: "POST",
         path: `/service-account/${id(input, "serviceAccountId")}`,
         body: compactObject({
-          name: optionalString(input.name),
+          name: optionalRawString(input.name),
           description: optionalRawString(input.description),
         }),
       }),
@@ -688,8 +688,8 @@ export const zerotierActionHandlers: ProviderActionHandlers<"zerotier", Zerotier
         method: "POST",
         path: "/user",
         body: compactObject({
-          firstName: optionalString(input.firstName),
-          lastName: optionalString(input.lastName),
+          firstName: optionalRawString(input.firstName),
+          lastName: optionalRawString(input.lastName),
         }),
       }),
     );

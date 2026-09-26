@@ -91,6 +91,16 @@ describe("ZeroTier v1 request shaping", () => {
     );
   });
 
+  it("sends empty user profile fields so they can be cleared", async () => {
+    const fetcher = jsonFetcher({ id: "u1" }, (url, init) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/user/u1`);
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({ displayName: "", smsNumber: "" });
+    });
+    await zerotierActionHandlers.update_user({ userId: "u1", displayName: "", smsNumber: "" }, v1Context(fetcher));
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it.each([{ ipv4Assignments: ["10.0.0.1"] }, { ipv6Assignments: ["fd00::1"] }])(
     "rejects the v2-only member field %j on v1 before any request",
     async (fields) => {
@@ -177,6 +187,60 @@ describe("ZeroTier v2 request shaping", () => {
       expect(JSON.parse(String(init?.body))).toEqual({ description: "" });
     });
     await zerotierActionHandlers.update_network({ networkId: "nw1", description: "" }, v2Context(fetcher));
+  });
+
+  it("sends an empty member name so it can be cleared", async () => {
+    const v1Fetcher = jsonFetcher({ id: "abcdef0123" }, (url, init) => {
+      expect(url).toBe(`${zerotierV1BaseUrl}/network/nw1/member/abcdef0123`);
+      expect(JSON.parse(String(init?.body))).toEqual({ name: "", config: {} });
+    });
+    await zerotierActionHandlers.update_member(
+      { networkId: "nw1", memberId: "abcdef0123", name: "" },
+      v1Context(v1Fetcher),
+    );
+    expect(v1Fetcher).toHaveBeenCalledOnce();
+
+    const v2Fetcher = jsonFetcher({ deviceId: "abcdef0123" }, (url, init) => {
+      expect(url).toBe(`${zerotierV2BaseUrl}/network/nw1/member/abcdef0123`);
+      expect(JSON.parse(String(init?.body))).toEqual({ name: "" });
+    });
+    await zerotierActionHandlers.update_member(
+      { networkId: "nw1", memberId: "abcdef0123", name: "" },
+      v2Context(v2Fetcher),
+    );
+    expect(v2Fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("sends an empty v2 network name the way v1 does and leaves its validation to upstream", async () => {
+    const fetcher = jsonFetcher({}, (url, init) => {
+      expect(url).toBe(`${zerotierV2BaseUrl}/network/nw1`);
+      expect(JSON.parse(String(init?.body))).toEqual({ name: "" });
+    });
+    await zerotierActionHandlers.update_network({ networkId: "nw1", name: "" }, v2Context(fetcher));
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("forwards group, service account, and user names exactly as given", async () => {
+    const expectBody = (path: string, body: unknown) =>
+      jsonFetcher({}, (url, init) => {
+        expect(url).toBe(`${zerotierV2BaseUrl}${path}`);
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual(body);
+      });
+
+    const groupFetcher = expectBody("/network-group/grp1", { name: " " });
+    await zerotierActionHandlers.update_network_group({ networkGroupId: "grp1", name: " " }, v2Context(groupFetcher));
+    const accountFetcher = expectBody("/service-account/sa1", { name: "" });
+    await zerotierActionHandlers.update_service_account(
+      { serviceAccountId: "sa1", name: "" },
+      v2Context(accountFetcher),
+    );
+    const userFetcher = expectBody("/user", { firstName: "", lastName: "" });
+    await zerotierActionHandlers.update_current_user({ firstName: "", lastName: "" }, v2Context(userFetcher));
+
+    expect(groupFetcher).toHaveBeenCalledOnce();
+    expect(accountFetcher).toHaveBeenCalledOnce();
+    expect(userFetcher).toHaveBeenCalledOnce();
   });
 
   it("sends flow rules to the v2beta base URL", async () => {
