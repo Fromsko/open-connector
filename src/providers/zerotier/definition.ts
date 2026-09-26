@@ -16,7 +16,7 @@ export const provider: ProviderDefinition = {
       type: "custom_credential",
       label: "ZeroTier API Token",
       description:
-        "Choose the API generation matching your token: v1 tokens come from the Legacy Central Account page (api.zerotier.com), v2 service account API keys come from New Central (central.zerotier.com).",
+        "Choose the API generation matching your token: v1 tokens come from Legacy Central (my.zerotier.com > Account > API Access Tokens), v2 service account API keys come from New Central (central.zerotier.com).",
       fields: [
         {
           key: "apiVersion",

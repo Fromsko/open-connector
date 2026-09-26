@@ -100,7 +100,7 @@ export const zerotierActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_network",
     operationType: "read",
-    description: "Get one ZeroTier network by ID, including its config and member counts.",
+    description: "Get one ZeroTier network by ID, including its config (v1 responses also include member counts).",
     inputSchema: s.object(
       "Input for fetching one ZeroTier network.",
       { networkId: networkIdParam },
@@ -148,7 +148,7 @@ export const zerotierActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "delete_network",
     operationType: "destructive",
-    description: "Delete a ZeroTier network permanently.",
+    description: "Permanently delete a ZeroTier network and all its members.",
     inputSchema: s.object(
       "Input for deleting a ZeroTier network.",
       { networkId: networkIdParam },
@@ -349,7 +349,8 @@ export const zerotierActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "delete_user",
     operationType: "destructive",
-    description: "v1 only: delete a ZeroTier user account by ID.",
+    description:
+      "v1 only: permanently delete a ZeroTier user account by ID. Upstream also deletes every network the user owns; this cannot be undone.",
     inputSchema: s.object(
       "Input for deleting a user.",
       { userId: s.nonEmptyString("The user ID.") },
@@ -471,7 +472,7 @@ export const zerotierActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "delete_network_group",
     operationType: "destructive",
-    description: "v2 only: delete a network group.",
+    description: "v2 only: permanently delete a network group. Upstream also deletes all networks in the group.",
     inputSchema: s.object(
       "Input for deleting a network group.",
       { networkGroupId: s.nonEmptyString("The network group ID.") },
@@ -563,13 +564,16 @@ export const zerotierActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "search_principals",
     operationType: "read",
-    description: "v2 only: search org principals (users, service accounts) by email term.",
+    description: "v2 only: search org users by email term.",
     inputSchema: s.object(
       "Input for searching principals.",
       {
         orgId: orgIdParam,
         search: s.nonEmptyString("Search term matched against principal email addresses."),
-        principalType: s.stringArray("Optional principal-type filters."),
+        principalType: s.array(
+          'Optional principal-type filters (upstream accepts only "user").',
+          s.stringEnum(["user"], { description: "A principal type." }),
+        ),
       },
       { required: ["orgId", "search"] },
     ),
@@ -641,7 +645,7 @@ export const zerotierActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "delete_service_account",
     operationType: "destructive",
-    description: "v2 only: delete a service account.",
+    description: "v2 only: permanently delete a service account and all of its API keys.",
     inputSchema: s.object(
       "Input for deleting a service account.",
       { serviceAccountId: s.nonEmptyString("The service account ID.") },
@@ -778,7 +782,8 @@ export const zerotierActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "delete_webhook_secret",
     operationType: "destructive",
-    description: "v2 only: delete one webhook secret by ID.",
+    description:
+      "v2 only: revoke an overlap (previous) webhook secret by ID before its grace window ends. The active primary secret cannot be deleted (upstream returns 400); rotate first.",
     inputSchema: s.object(
       "Input for deleting a webhook secret.",
       { webhookSecretId: s.nonEmptyString("The webhook secret ID.") },

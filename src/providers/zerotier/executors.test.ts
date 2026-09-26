@@ -525,6 +525,13 @@ describe("ZeroTier action schemas", () => {
     ).toBe(false);
   });
 
+  it("limits principal searches to the user principal type", () => {
+    const searchPrincipals = action("search_principals");
+    const input = (principalType: string[]) => ({ orgId: "org1", search: "alice", principalType });
+    expect(validateActionInput(searchPrincipals, input(["user"])).valid).toBe(true);
+    expect(validateActionInput(searchPrincipals, input(["service_account"])).valid).toBe(false);
+  });
+
   it("applies the upstream webhook limits", () => {
     const createWebhook = action("create_webhook");
     const webhook = { orgId: "org1", url: "https://hooks.example.com/zt", eventList: ["network.created"] };
