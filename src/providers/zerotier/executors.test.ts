@@ -624,9 +624,10 @@ describe("ZeroTier action schemas", () => {
     expect(validateActionInput(checkPermissions, check("networkGroup")).valid).toBe(false);
   });
 
-  it("marks IAM revocation and replacement as destructive", () => {
+  it("marks IAM and network permission revocation or replacement as destructive", () => {
     expect(action("replace_iam").operationType).toBe("destructive");
     expect(action("remove_iam").operationType).toBe("destructive");
+    expect(action("set_network_user_permissions").operationType).toBe("destructive");
     expect(action("add_iam").operationType).toBe("write");
   });
 

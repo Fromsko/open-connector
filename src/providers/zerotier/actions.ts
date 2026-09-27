@@ -391,7 +391,7 @@ export const zerotierActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "set_network_user_permissions",
-    operationType: "write",
+    operationType: "destructive",
     description:
       "v1 only: replace a user's permission set on a network. The call sets all four flags, so omitted flags are sent as false.",
     inputSchema: s.object(
